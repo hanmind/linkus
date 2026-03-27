@@ -1,0 +1,151 @@
+import { db } from "./db";
+import { getPlaylistItems } from "./youtube";
+import { refreshAccessToken, addTracksToPlaylist } from "./spotify";
+import { matchTrack } from "./matcher";
+
+/**
+ * Get a valid Spotify access token for a user, refreshing if needed.
+ */
+async function getValidAccessToken(userId: string): Promise<string> {
+  const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
+
+  if (user.tokenExpiry > new Date(Date.now() + 60_000)) {
+    return user.accessToken;
+  }
+
+  const refreshed = await refreshAccessToken(user.refreshToken);
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      accessToken: refreshed.accessToken,
+      refreshToken: refreshed.refreshToken,
+      tokenExpiry: new Date(Date.now() + refreshed.expiresIn * 1000),
+    },
+  });
+
+  return refreshed.accessToken;
+}
+
+/**
+ * Sync a single playlist link: fetch YouTube items, match to Spotify, add new tracks.
+ */
+export async function syncPlaylistLink(linkId: string): Promise<{
+  found: number;
+  matched: number;
+  failed: number;
+}> {
+  const link = await db.playlistLink.findUniqueOrThrow({
+    where: { id: linkId },
+    include: { syncedTracks: { select: { youtubeVideoId: true } } },
+  });
+
+  const log = await db.syncLog.create({
+    data: { playlistLinkId: linkId },
+  });
+
+  try {
+    const accessToken = await getValidAccessToken(link.userId);
+    const ytItems = await getPlaylistItems(link.youtubePlaylistId);
+
+    const existingVideoIds = new Set(link.syncedTracks.map((t) => t.youtubeVideoId));
+    const newItems = ytItems.filter((item) => !existingVideoIds.has(item.videoId));
+
+    if (newItems.length === 0) {
+      await db.syncLog.update({
+        where: { id: log.id },
+        data: {
+          completedAt: new Date(),
+          tracksFound: 0,
+          status: "success",
+        },
+      });
+      await db.playlistLink.update({
+        where: { id: linkId },
+        data: { lastSyncedAt: new Date() },
+      });
+      return { found: 0, matched: 0, failed: 0 };
+    }
+
+    let matched = 0;
+    let failed = 0;
+    const trackUrisToAdd: string[] = [];
+
+    for (const item of newItems) {
+      const result = await matchTrack(accessToken, item.title, item.channelTitle);
+
+      await db.syncedTrack.create({
+        data: {
+          playlistLinkId: linkId,
+          youtubeVideoId: item.videoId,
+          youtubeTitle: item.title,
+          spotifyTrackId: result.spotifyTrack?.id ?? null,
+          matchConfidence: result.confidence,
+        },
+      });
+
+      if (result.spotifyTrack) {
+        trackUrisToAdd.push(result.spotifyTrack.uri);
+        matched++;
+      } else {
+        failed++;
+      }
+    }
+
+    if (trackUrisToAdd.length > 0) {
+      await addTracksToPlaylist(accessToken, link.spotifyPlaylistId, trackUrisToAdd);
+    }
+
+    const status = failed === 0 ? "success" : matched === 0 ? "failed" : "partial";
+
+    await db.syncLog.update({
+      where: { id: log.id },
+      data: {
+        completedAt: new Date(),
+        tracksFound: newItems.length,
+        tracksMatched: matched,
+        tracksFailed: failed,
+        status,
+      },
+    });
+
+    await db.playlistLink.update({
+      where: { id: linkId },
+      data: { lastSyncedAt: new Date() },
+    });
+
+    return { found: newItems.length, matched, failed };
+  } catch (error) {
+    await db.syncLog.update({
+      where: { id: log.id },
+      data: {
+        completedAt: new Date(),
+        status: "failed",
+      },
+    });
+    throw error;
+  }
+}
+
+/**
+ * Run sync for all enabled playlist links that are due.
+ */
+export async function syncAllDueLinks(): Promise<void> {
+  const links = await db.playlistLink.findMany({
+    where: { syncEnabled: true },
+  });
+
+  const now = Date.now();
+
+  for (const link of links) {
+    const lastSync = link.lastSyncedAt?.getTime() ?? 0;
+    const intervalMs = link.syncIntervalHours * 60 * 60 * 1000;
+
+    if (now - lastSync >= intervalMs) {
+      try {
+        await syncPlaylistLink(link.id);
+      } catch (error) {
+        console.error(`Sync failed for link ${link.id}:`, error);
+      }
+    }
+  }
+}
