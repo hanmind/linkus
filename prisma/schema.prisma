@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  spotifyId    String   @unique
+  email        String?
+  name         String?
+  accessToken  String
+  refreshToken String
+  tokenExpiry  DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  playlistLinks PlaylistLink[]
+}
+
+model PlaylistLink {
+  id                   String    @id @default(cuid())
+  userId               String
+  youtubePlaylistId    String
+  youtubePlaylistTitle String
+  spotifyPlaylistId    String
+  syncEnabled          Boolean   @default(true)
+  syncIntervalHours    Int       @default(6)
+  lastSyncedAt         DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncedTracks SyncedTrack[]
+  syncLogs     SyncLog[]
+
+  @@unique([userId, youtubePlaylistId])
+}
+
+model SyncedTrack {
+  id              String   @id @default(cuid())
+  playlistLinkId  String
+  youtubeVideoId  String
+  youtubeTitle    String
+  spotifyTrackId  String?
+  matchConfidence Float?
+  syncedAt        DateTime @default(now())
+
+  playlistLink PlaylistLink @relation(fields: [playlistLinkId], references: [id], onDelete: Cascade)
+
+  @@unique([playlistLinkId, youtubeVideoId])
+}
+
+model SyncLog {
+  id             String    @id @default(cuid())
+  playlistLinkId String
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+  tracksFound    Int       @default(0)
+  tracksMatched  Int       @default(0)
+  tracksFailed   Int       @default(0)
+  status         String    @default("running") // running | success | partial | failed
+
+  playlistLink PlaylistLink @relation(fields: [playlistLinkId], references: [id], onDelete: Cascade)
+}
