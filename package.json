@@ -9,9 +9,9 @@
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:generate": "prisma generate --config prisma/prisma.config.ts",
+    "db:push": "node --env-file=.env.local node_modules/prisma/build/index.js db push --config prisma/prisma.config.ts",
+    "db:studio": "node --env-file=.env.local node_modules/prisma/build/index.js studio --config prisma/prisma.config.ts"
   },
   "description": "YouTube to Spotify playlist auto-sync service",
   "dependencies": {
