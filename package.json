@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
+    "build": "prisma generate --config prisma/prisma.config.ts && next build",
     "start": "next start",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
