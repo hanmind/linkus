@@ -10,19 +10,18 @@ const SPOTIFY_SCOPES = [
 ].join(" ");
 
 export const authConfig: NextAuthConfig = {
+  trustHost: true,
   providers: [
     {
       id: "spotify",
       name: "Spotify",
       type: "oauth",
-      authorization: {
-        url: "https://accounts.spotify.com/authorize",
-        params: { scope: SPOTIFY_SCOPES },
-      },
+      authorization: `https://accounts.spotify.com/authorize?scope=${encodeURIComponent(SPOTIFY_SCOPES)}`,
       token: "https://accounts.spotify.com/api/token",
       userinfo: "https://api.spotify.com/v1/me",
       clientId: process.env.SPOTIFY_CLIENT_ID,
       clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+      checks: ["state"],
       profile(profile) {
         return {
           id: profile.id,
