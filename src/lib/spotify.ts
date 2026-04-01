@@ -28,7 +28,8 @@ export async function refreshAccessToken(refreshToken: string): Promise<{
   });
 
   if (!res.ok) {
-    throw new Error(`Spotify token refresh failed: ${res.status}`);
+    const body = await res.text();
+    throw new Error(`Spotify token refresh failed: ${res.status} ${body.slice(0, 200)}`);
   }
 
   const data = await res.json();
@@ -125,7 +126,8 @@ export async function getSpotifyUserId(
 ): Promise<string> {
   const res = await spotifyFetch(accessToken, "/me");
   if (!res.ok) {
-    throw new Error(`Failed to get Spotify user: ${res.status}`);
+    const body = await res.text();
+    throw new Error(`Failed to get Spotify user: ${res.status} ${body.slice(0, 200)}`);
   }
   const data = await res.json();
   return data.id;
