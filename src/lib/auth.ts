@@ -8,7 +8,7 @@ function getTokenExpiry(expiresIn?: number) {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
-  debug: true,
+  debug: process.env.NODE_ENV !== "production",
   callbacks: {
     async signIn({ account, profile }) {
       if (!account || !profile) {
