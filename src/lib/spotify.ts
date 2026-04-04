@@ -74,11 +74,10 @@ export async function searchTrack(
 
 export async function createPlaylist(
   accessToken: string,
-  userId: string,
   name: string,
   description: string
 ): Promise<{ id: string; externalUrl: string }> {
-  const res = await spotifyFetch(accessToken, `/users/${userId}/playlists`, {
+  const res = await spotifyFetch(accessToken, "/me/playlists", {
     method: "POST",
     body: JSON.stringify({
       name,
@@ -88,7 +87,10 @@ export async function createPlaylist(
   });
 
   if (!res.ok) {
-    throw new Error(`Failed to create Spotify playlist: ${res.status}`);
+    const body = await res.text();
+    throw new Error(
+      `Failed to create Spotify playlist: ${res.status} ${body.slice(0, 200)}`
+    );
   }
 
   const data = await res.json();
@@ -116,7 +118,10 @@ export async function addTracksToPlaylist(
     );
 
     if (!res.ok) {
-      throw new Error(`Failed to add tracks to Spotify playlist: ${res.status}`);
+      const body = await res.text();
+      throw new Error(
+        `Failed to add tracks to Spotify playlist: ${res.status} ${body.slice(0, 200)}`
+      );
     }
   }
 }

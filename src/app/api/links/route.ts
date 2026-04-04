@@ -5,7 +5,6 @@ import { extractPlaylistId, getPlaylistInfo } from "@/lib/youtube";
 import {
   refreshAccessToken,
   createPlaylist,
-  getSpotifyUserId,
 } from "@/lib/spotify";
 import { syncPlaylistLink } from "@/lib/sync";
 
@@ -120,10 +119,8 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const spotifyUserId = await getSpotifyUserId(accessToken);
   const spotifyPlaylist = await createPlaylist(
     accessToken,
-    spotifyUserId,
     `${ytPlaylist.title} (Linkus)`,
     `Auto-synced from YouTube by Linkus`
   );
