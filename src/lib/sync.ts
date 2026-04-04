@@ -46,9 +46,14 @@ export async function syncPlaylistLink(linkId: string): Promise<{
   try {
     const accessToken = await getValidAccessToken(link.userId);
     const ytItems = await getPlaylistItems(link.youtubePlaylistId);
+    const dedupedItems = Array.from(
+      new Map(ytItems.map((item) => [item.videoId, item])).values()
+    );
 
     const existingVideoIds = new Set(link.syncedTracks.map((t) => t.youtubeVideoId));
-    const newItems = ytItems.filter((item) => !existingVideoIds.has(item.videoId));
+    const newItems = dedupedItems.filter(
+      (item) => !existingVideoIds.has(item.videoId)
+    );
 
     if (newItems.length === 0) {
       await db.syncLog.update({
@@ -71,10 +76,35 @@ export async function syncPlaylistLink(linkId: string): Promise<{
     const trackUrisToAdd: string[] = [];
 
     for (const item of newItems) {
+      const existingTrack = await db.syncedTrack.findUnique({
+        where: {
+          playlistLinkId_youtubeVideoId: {
+            playlistLinkId: linkId,
+            youtubeVideoId: item.videoId,
+          },
+        },
+        select: { id: true, spotifyTrackId: true },
+      });
+
+      if (existingTrack) {
+        continue;
+      }
+
       const result = await matchTrack(accessToken, item.title, item.channelTitle);
 
-      await db.syncedTrack.create({
-        data: {
+      await db.syncedTrack.upsert({
+        where: {
+          playlistLinkId_youtubeVideoId: {
+            playlistLinkId: linkId,
+            youtubeVideoId: item.videoId,
+          },
+        },
+        update: {
+          youtubeTitle: item.title,
+          spotifyTrackId: result.spotifyTrack?.id ?? null,
+          matchConfidence: result.confidence,
+        },
+        create: {
           playlistLinkId: linkId,
           youtubeVideoId: item.videoId,
           youtubeTitle: item.title,
