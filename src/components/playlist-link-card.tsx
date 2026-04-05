@@ -18,24 +18,20 @@ interface PlaylistLinkData {
 
 export function PlaylistLinkCard({
   link,
+  isSyncing,
   onDelete,
   onSync,
 }: {
   link: PlaylistLinkData;
+  isSyncing: boolean;
   onDelete: (id: string) => void;
-  onSync: (id: string) => void;
+  onSync: (id: string) => Promise<void>;
 }) {
-  const [syncing, setSyncing] = useState(false);
   const [enabled, setEnabled] = useState(link.syncEnabled);
   const failedTracks = link.totalTracks - link.matchedTracks;
 
   async function handleSync() {
-    setSyncing(true);
-    try {
-      onSync(link.id);
-    } finally {
-      setTimeout(() => setSyncing(false), 3000);
-    }
+    await onSync(link.id);
   }
 
   async function handleToggle() {
@@ -56,7 +52,7 @@ export function PlaylistLinkCard({
             {link.youtubePlaylistTitle}
           </h3>
           <div className="mt-1 flex items-center gap-2">
-            <SyncStatusBadge status={link.lastSyncStatus} />
+            <SyncStatusBadge status={isSyncing ? "running" : link.lastSyncStatus} />
             {link.lastSyncedAt && (
               <span className="text-xs text-[var(--muted-foreground)]">
                 {new Date(link.lastSyncedAt).toLocaleString("ko-KR")}
@@ -118,10 +114,10 @@ export function PlaylistLinkCard({
         <div className="flex-1" />
         <button
           onClick={handleSync}
-          disabled={syncing}
+          disabled={isSyncing}
           className="rounded-lg px-3 py-1.5 text-xs font-medium text-[var(--card-foreground)] transition-colors hover:bg-[var(--muted)] disabled:opacity-50"
         >
-          {syncing ? "동기화 중..." : "지금 동기화"}
+          {isSyncing ? "동기화 중..." : "지금 동기화"}
         </button>
         <button
           onClick={() => onDelete(link.id)}

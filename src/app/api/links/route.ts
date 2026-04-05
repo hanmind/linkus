@@ -6,7 +6,6 @@ import {
   refreshAccessToken,
   createPlaylist,
 } from "@/lib/spotify";
-import { syncPlaylistLink } from "@/lib/sync";
 
 export async function GET() {
   const session = await auth();
@@ -134,34 +133,12 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  let initialSync:
-    | { status: "success"; found: number; matched: number; failed: number }
-    | { status: "failed"; error: string };
-
-  try {
-    const result = await syncPlaylistLink(link.id);
-    initialSync = {
-      status: "success",
-      ...result,
-    };
-  } catch (error) {
-    console.error(`Initial sync failed for link ${link.id}:`, error);
-    initialSync = {
-      status: "failed",
-      error: "Playlist linked, but the initial sync failed.",
-    };
-  }
-
   return NextResponse.json(
     {
       id: link.id,
       youtubePlaylistTitle: ytPlaylist.title,
       spotifyPlaylistId: spotifyPlaylist.id,
-      initialSync,
-      message:
-        initialSync.status === "success"
-          ? "Playlist linked! Initial sync completed."
-          : "Playlist linked, but the initial sync failed.",
+      message: "Playlist linked. Initial sync will start now.",
     },
     { status: 201 }
   );

@@ -17,9 +17,17 @@ interface LinkData {
   lastSyncStatus: string | null;
 }
 
+interface NewLinkResponse {
+  id: string;
+  youtubePlaylistTitle: string;
+  spotifyPlaylistId: string;
+  message: string;
+}
+
 export function DashboardClient() {
   const [links, setLinks] = useState<LinkData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncingIds, setSyncingIds] = useState<string[]>([]);
 
   const fetchLinks = useCallback(async () => {
     try {
@@ -45,12 +53,24 @@ export function DashboardClient() {
   }
 
   async function handleSync(id: string) {
-    await fetch(`/api/sync/${id}`, { method: "POST" });
-    setTimeout(fetchLinks, 5000);
+    setSyncingIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+
+    try {
+      await fetchLinks();
+
+      const res = await fetch(`/api/sync/${id}`, { method: "POST" });
+      if (!res.ok) {
+        console.error(`Sync failed for link ${id}`);
+      }
+    } finally {
+      setSyncingIds((prev) => prev.filter((syncingId) => syncingId !== id));
+      await fetchLinks();
+    }
   }
 
-  function handleLinkCreated() {
-    fetchLinks();
+  async function handleLinkCreated(link: NewLinkResponse) {
+    await fetchLinks();
+    void handleSync(link.id);
   }
 
   if (loading) {
@@ -79,6 +99,7 @@ export function DashboardClient() {
             <PlaylistLinkCard
               key={link.id}
               link={link}
+              isSyncing={syncingIds.includes(link.id)}
               onDelete={handleDelete}
               onSync={handleSync}
             />

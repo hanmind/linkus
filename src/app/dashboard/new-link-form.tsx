@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 
-export function NewLinkForm({ onCreated }: { onCreated: () => void }) {
+interface NewLinkResponse {
+  id: string;
+  youtubePlaylistTitle: string;
+  spotifyPlaylistId: string;
+  message: string;
+}
+
+export function NewLinkForm({
+  onCreated,
+}: {
+  onCreated: (link: NewLinkResponse) => Promise<void>;
+}) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +41,9 @@ export function NewLinkForm({ onCreated }: { onCreated: () => void }) {
         return;
       }
 
-      setSuccess(
-        data.message ?? `"${data.youtubePlaylistTitle}" 연동 완료! 초기 동기화가 완료되었습니다.`
-      );
+      setSuccess(`"${data.youtubePlaylistTitle}" 연동 완료! 초기 동기화를 시작합니다.`);
       setUrl("");
-      onCreated();
+      await onCreated(data);
     } catch {
       setError("네트워크 오류가 발생했습니다");
     } finally {
