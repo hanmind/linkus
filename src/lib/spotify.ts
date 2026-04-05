@@ -110,7 +110,7 @@ export async function addTracksToPlaylist(
     const batch = trackUris.slice(i, i + 100);
     const res = await spotifyFetch(
       accessToken,
-      `/playlists/${playlistId}/tracks`,
+      `/playlists/${playlistId}/items`,
       {
         method: "POST",
         body: JSON.stringify({ uris: batch }),

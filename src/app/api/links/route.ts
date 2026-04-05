@@ -134,17 +134,34 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // Trigger initial sync (fire-and-forget for the response)
-  syncPlaylistLink(link.id).catch((err) =>
-    console.error(`Initial sync failed for link ${link.id}:`, err)
-  );
+  let initialSync:
+    | { status: "success"; found: number; matched: number; failed: number }
+    | { status: "failed"; error: string };
+
+  try {
+    const result = await syncPlaylistLink(link.id);
+    initialSync = {
+      status: "success",
+      ...result,
+    };
+  } catch (error) {
+    console.error(`Initial sync failed for link ${link.id}:`, error);
+    initialSync = {
+      status: "failed",
+      error: "Playlist linked, but the initial sync failed.",
+    };
+  }
 
   return NextResponse.json(
     {
       id: link.id,
       youtubePlaylistTitle: ytPlaylist.title,
       spotifyPlaylistId: spotifyPlaylist.id,
-      message: "Playlist linked! Initial sync has started.",
+      initialSync,
+      message:
+        initialSync.status === "success"
+          ? "Playlist linked! Initial sync completed."
+          : "Playlist linked, but the initial sync failed.",
     },
     { status: 201 }
   );

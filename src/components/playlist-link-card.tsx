@@ -91,11 +91,10 @@ export function PlaylistLinkCard({
           </div>
         )}
         <div>
-          매{" "}
           <span className="font-medium text-[var(--card-foreground)]">
-            {link.syncIntervalHours}
-          </span>
-          시간 동기화
+            하루 1회
+          </span>{" "}
+          자동 동기화
         </div>
       </div>
 

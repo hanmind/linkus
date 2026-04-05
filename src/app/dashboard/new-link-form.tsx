@@ -30,7 +30,9 @@ export function NewLinkForm({ onCreated }: { onCreated: () => void }) {
         return;
       }
 
-      setSuccess(`"${data.youtubePlaylistTitle}" 연동 완료! 초기 동기화가 시작되었습니다.`);
+      setSuccess(
+        data.message ?? `"${data.youtubePlaylistTitle}" 연동 완료! 초기 동기화가 완료되었습니다.`
+      );
       setUrl("");
       onCreated();
     } catch {
