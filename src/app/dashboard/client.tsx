@@ -28,6 +28,7 @@ export function DashboardClient() {
   const [links, setLinks] = useState<LinkData[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingIds, setSyncingIds] = useState<string[]>([]);
+  const [pendingInitialSyncId, setPendingInitialSyncId] = useState<string | null>(null);
 
   const fetchLinks = useCallback(async () => {
     try {
@@ -52,7 +53,7 @@ export function DashboardClient() {
     setLinks((prev) => prev.filter((l) => l.id !== id));
   }
 
-  async function handleSync(id: string) {
+  const handleSync = useCallback(async (id: string) => {
     setSyncingIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
 
     try {
@@ -66,11 +67,27 @@ export function DashboardClient() {
       setSyncingIds((prev) => prev.filter((syncingId) => syncingId !== id));
       await fetchLinks();
     }
-  }
+  }, [fetchLinks]);
+
+  useEffect(() => {
+    if (!pendingInitialSyncId) {
+      return;
+    }
+
+    const linkExists = links.some((link) => link.id === pendingInitialSyncId);
+    const alreadySyncing = syncingIds.includes(pendingInitialSyncId);
+
+    if (!linkExists || alreadySyncing) {
+      return;
+    }
+
+    setPendingInitialSyncId(null);
+    void handleSync(pendingInitialSyncId);
+  }, [handleSync, links, pendingInitialSyncId, syncingIds]);
 
   async function handleLinkCreated(link: NewLinkResponse) {
     await fetchLinks();
-    void handleSync(link.id);
+    setPendingInitialSyncId(link.id);
   }
 
   if (loading) {
