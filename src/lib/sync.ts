@@ -129,7 +129,7 @@ export async function syncPlaylistLink(
       await addTracksToPlaylist(accessToken, link.spotifyPlaylistId, trackUrisToAdd);
     }
 
-    const status = failed === 0 ? "success" : matched === 0 ? "failed" : "partial";
+    const status = failed === 0 ? "success" : "partial";
 
     await db.syncLog.update({
       where: { id: log.id },

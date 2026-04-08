@@ -117,7 +117,7 @@ export function DashboardClient() {
         </div>
       ) : (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">내 플레이리스트 연동</h2>
+          <h2 className="text-lg font-semibold">연동된 플레이리스트</h2>
           {links.map((link) => (
             <PlaylistLinkCard
               key={link.id}
