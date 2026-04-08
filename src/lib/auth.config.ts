@@ -30,7 +30,7 @@ export const authConfig: NextAuthConfig = {
       id: "spotify",
       name: "Spotify",
       type: "oauth",
-      authorization: `https://accounts.spotify.com/authorize?scope=${encodeURIComponent(SPOTIFY_SCOPES)}`,
+      authorization: `https://accounts.spotify.com/authorize?scope=${encodeURIComponent(SPOTIFY_SCOPES)}&show_dialog=true`,
       token: {
         url: "https://accounts.spotify.com/api/token",
         async conform(response: Response) {
