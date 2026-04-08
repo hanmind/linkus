@@ -29,14 +29,21 @@ async function getValidAccessToken(userId: string): Promise<string> {
 /**
  * Sync a single playlist link: fetch YouTube items, match to Spotify, add new tracks.
  */
-export async function syncPlaylistLink(linkId: string): Promise<{
+export async function syncPlaylistLink(
+  linkId: string,
+  options: { forceRetryFailed?: boolean } = {}
+): Promise<{
   found: number;
   matched: number;
   failed: number;
 }> {
   const link = await db.playlistLink.findUniqueOrThrow({
     where: { id: linkId },
-    include: { syncedTracks: { select: { youtubeVideoId: true } } },
+    include: {
+      syncedTracks: {
+        select: { youtubeVideoId: true, spotifyTrackId: true },
+      },
+    },
   });
 
   const log = await db.syncLog.create({
@@ -50,12 +57,23 @@ export async function syncPlaylistLink(linkId: string): Promise<{
       new Map(ytItems.map((item) => [item.videoId, item])).values()
     );
 
-    const existingVideoIds = new Set(link.syncedTracks.map((t) => t.youtubeVideoId));
-    const newItems = dedupedItems.filter(
-      (item) => !existingVideoIds.has(item.videoId)
+    const syncedTrackMap = new Map(
+      link.syncedTracks.map((t) => [t.youtubeVideoId, t.spotifyTrackId])
     );
 
-    if (newItems.length === 0) {
+    const itemsToProcess = dedupedItems.filter((item) => {
+      const existingSpotifyId = syncedTrackMap.get(item.videoId);
+      // 신규 곡이거나, 옵션이 켜져 있고 기존에 실패한 곡인 경우
+      const isNew = !syncedTrackMap.has(item.videoId);
+      const isFailedAndRetry =
+        options.forceRetryFailed &&
+        syncedTrackMap.has(item.videoId) &&
+        existingSpotifyId === null;
+
+      return isNew || isFailedAndRetry;
+    });
+
+    if (itemsToProcess.length === 0) {
       await db.syncLog.update({
         where: { id: log.id },
         data: {
@@ -75,21 +93,7 @@ export async function syncPlaylistLink(linkId: string): Promise<{
     let failed = 0;
     const trackUrisToAdd: string[] = [];
 
-    for (const item of newItems) {
-      const existingTrack = await db.syncedTrack.findUnique({
-        where: {
-          playlistLinkId_youtubeVideoId: {
-            playlistLinkId: linkId,
-            youtubeVideoId: item.videoId,
-          },
-        },
-        select: { id: true, spotifyTrackId: true },
-      });
-
-      if (existingTrack) {
-        continue;
-      }
-
+    for (const item of itemsToProcess) {
       const result = await matchTrack(accessToken, item.title, item.channelTitle);
 
       await db.syncedTrack.upsert({
@@ -131,7 +135,7 @@ export async function syncPlaylistLink(linkId: string): Promise<{
       where: { id: log.id },
       data: {
         completedAt: new Date(),
-        tracksFound: newItems.length,
+        tracksFound: itemsToProcess.length,
         tracksMatched: matched,
         tracksFailed: failed,
         status,
@@ -143,7 +147,7 @@ export async function syncPlaylistLink(linkId: string): Promise<{
       data: { lastSyncedAt: new Date() },
     });
 
-    return { found: newItems.length, matched, failed };
+    return { found: itemsToProcess.length, matched, failed };
   } catch (error) {
     await db.syncLog.update({
       where: { id: log.id },

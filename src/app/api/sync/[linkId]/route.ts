@@ -29,7 +29,7 @@ export async function POST(
   }
 
   try {
-    const result = await syncPlaylistLink(linkId);
+    const result = await syncPlaylistLink(linkId, { forceRetryFailed: true });
     return NextResponse.json({
       message: "Sync completed",
       ...result,
