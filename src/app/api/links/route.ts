@@ -23,7 +23,15 @@ export async function GET() {
   const links = await db.playlistLink.findMany({
     where: { userId: user.id },
     include: {
-      syncedTracks: { select: { id: true, spotifyTrackId: true } },
+      syncedTracks: {
+        select: {
+          youtubeTitle: true,
+          youtubeVideoId: true,
+          spotifyTrackId: true,
+          matchConfidence: true,
+        },
+        orderBy: { syncedAt: "asc" },
+      },
       syncLogs: {
         orderBy: { startedAt: "desc" },
         take: 1,
@@ -44,6 +52,12 @@ export async function GET() {
     matchedTracks: link.syncedTracks.filter((t) => t.spotifyTrackId).length,
     lastSyncStatus: link.syncLogs[0]?.status ?? null,
     createdAt: link.createdAt,
+    tracks: link.syncedTracks.map((t) => ({
+      youtubeTitle: t.youtubeTitle,
+      youtubeVideoId: t.youtubeVideoId,
+      spotifyTrackId: t.spotifyTrackId,
+      matchConfidence: t.matchConfidence,
+    })),
   }));
 
   return NextResponse.json(formatted);

@@ -6,8 +6,8 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
     className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   },
   partial: {
-    label: "부분 매칭",
-    className: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400",
+    label: "동기화 완료",
+    className: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400",
   },
   failed: {
     label: "동기화 실패",

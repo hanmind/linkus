@@ -18,6 +18,9 @@ export default async function Home() {
           <p className="mt-4 text-lg text-[var(--muted-foreground)]">
             유튜브 플레이리스트를 스포티파이로 자동 동기화
           </p>
+          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
+            연동한 플레이리스트는 매일 자동으로 동기화됩니다
+          </p>
         </div>
 
         <div className="space-y-4">

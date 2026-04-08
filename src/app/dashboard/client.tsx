@@ -15,6 +15,12 @@ interface LinkData {
   totalTracks: number;
   matchedTracks: number;
   lastSyncStatus: string | null;
+  tracks?: {
+    youtubeTitle: string;
+    youtubeVideoId: string;
+    spotifyTrackId: string | null;
+    matchConfidence: number | null;
+  }[];
 }
 
 interface NewLinkResponse {
