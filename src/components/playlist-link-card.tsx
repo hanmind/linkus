@@ -99,6 +99,30 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
+function ListIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <line x1="8" y1="6" x2="21" y2="6" />
+      <line x1="8" y1="12" x2="21" y2="12" />
+      <line x1="8" y1="18" x2="21" y2="18" />
+      <line x1="3" y1="6" x2="3.01" y2="6" />
+      <line x1="3" y1="12" x2="3.01" y2="12" />
+      <line x1="3" y1="18" x2="3.01" y2="18" />
+    </svg>
+  );
+}
+
 export function PlaylistLinkCard({
   link,
   isSyncing,
@@ -111,7 +135,6 @@ export function PlaylistLinkCard({
   onSync: (id: string) => Promise<void>;
 }) {
   const [enabled, setEnabled] = useState(link.syncEnabled);
-  const failedTracks = link.totalTracks - link.matchedTracks;
   const tracks = link.tracks ?? [];
 
   async function handleSync() {
@@ -151,54 +174,29 @@ export function PlaylistLinkCard({
             )}
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className="text-xs font-medium text-[var(--muted-foreground)]">
-            자동 동기화
-          </span>
-          <div className="flex items-center gap-2">
-            <span
-              className={`text-xs font-medium ${enabled ? "text-[var(--primary)]" : "text-[var(--muted-foreground)]"}`}
-            >
-              {enabled ? "켜짐" : "꺼짐"}
-            </span>
-            <label className="relative inline-flex cursor-pointer items-center">
-              <input
-                type="checkbox"
-                checked={enabled}
-                onChange={handleToggle}
-                className="peer sr-only"
-                aria-label="자동 동기화 켜기 또는 끄기"
-              />
-              <div className="h-5 w-9 rounded-full bg-[var(--muted)] after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-[var(--primary)] peer-checked:after:translate-x-full" />
-            </label>
-          </div>
+        <div className="flex shrink-0 items-center">
+          <label className="relative inline-flex cursor-pointer items-center" title="자동 동기화">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={handleToggle}
+              className="peer sr-only"
+              aria-label="자동 동기화 설정"
+            />
+            <div className="h-5 w-9 rounded-full bg-[var(--muted)] after:absolute after:left-[2px] after:top-[2px] after:h-4 after:w-4 after:rounded-full after:bg-white after:transition-transform peer-checked:bg-[var(--primary)] peer-checked:after:translate-x-full" />
+          </label>
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-sm text-[var(--muted-foreground)]">
-        <div>
-          <span className="font-medium text-[var(--card-foreground)]">
-            {link.matchedTracks}
-          </span>{" "}
-          곡 매칭
-        </div>
-        {failedTracks > 0 && (
-          <div>
-            <span className="font-medium text-[var(--destructive)]">
-              {failedTracks}
-            </span>{" "}
-            곡 실패
-          </div>
-        )}
       </div>
 
       {tracks.length > 0 && (
         <details className="mt-4 rounded-lg border border-[var(--border)] bg-[var(--muted)]/30">
           <summary className="cursor-pointer list-none px-3 py-2 text-sm font-medium text-[var(--card-foreground)] [&::-webkit-details-marker]:hidden">
             <span className="flex items-center justify-between gap-2">
-              <span>곡 목록 ({tracks.length}곡)</span>
-              <span className="text-xs font-normal text-[var(--muted-foreground)]">
-                매칭 / 실패 확인
+              <span className="flex items-center gap-2">
+                <ListIcon className="text-[var(--muted-foreground)]" />
+                <span className="text-xs font-semibold tabular-nums">
+                  {link.matchedTracks}/{link.totalTracks}
+                </span>
               </span>
             </span>
           </summary>
@@ -255,22 +253,20 @@ export function PlaylistLinkCard({
           type="button"
           onClick={handleSync}
           disabled={isSyncing}
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-[var(--card-foreground)] transition-colors hover:bg-[var(--muted)] disabled:opacity-50"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--card-foreground)] transition-colors hover:bg-[var(--muted)] disabled:opacity-50"
           title={isSyncing ? "동기화 중" : "지금 동기화"}
           aria-label={isSyncing ? "동기화 중" : "지금 동기화"}
         >
           <RefreshIcon />
-          <span className="hidden sm:inline">{isSyncing ? "동기화 중..." : "지금 동기화"}</span>
         </button>
         <button
           type="button"
           onClick={() => onDelete(link.id)}
-          className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-xs font-medium text-[var(--destructive)] transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-          title="연동 삭제"
-          aria-label="연동 삭제"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--destructive)] transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
+          title="연동 항목에서 삭제"
+          aria-label="연동 항목에서 삭제"
         >
           <TrashIcon />
-          <span className="hidden sm:inline">삭제</span>
         </button>
       </div>
     </div>
