@@ -132,14 +132,21 @@ export function PlaylistLinkCard({
     <div className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base font-semibold text-[var(--card-foreground)]">
-            {link.youtubePlaylistTitle}
-          </h3>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="truncate text-base font-semibold text-[var(--card-foreground)]">
+              {link.youtubePlaylistTitle}
+            </h3>
             <SyncStatusBadge status={isSyncing ? "running" : link.lastSyncStatus} />
+          </div>
+          <div className="mt-0.5 flex items-center gap-2">
             {link.lastSyncedAt && (
               <span className="text-xs text-[var(--muted-foreground)]">
-                {new Date(link.lastSyncedAt).toLocaleString("ko-KR")}
+                마지막 동기화: {new Date(link.lastSyncedAt).toLocaleString("ko-KR", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })}
               </span>
             )}
           </div>
