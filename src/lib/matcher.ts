@@ -39,8 +39,8 @@ const NOISE_PATTERNS = [
   /〔가사\/해석〕/i,
   /\bft\.?\s/i,
   /\bfeat\.?\s/i,
-  /\(feat\.[^)]*\)/i,
-  /\(ft\.[^)]*\)/i,
+  /\(feat\.?[^)]*\)/i,
+  /\(ft\.?[^)]*\)/i,
   /\bremaster(ed)?\b/i,
   /\bhd\b/i,
   /\b4k\b/i,
@@ -58,11 +58,8 @@ const NOISE_PATTERNS = [
 export function cleanTitle(title: string): string {
   let cleaned = title.trim();
 
-  // Remove content in quotes if they seem to be the track title
-  const quoteMatch = cleaned.match(/"([^"]+)"/);
-  if (quoteMatch && quoteMatch[1].length > 2) {
-    cleaned = quoteMatch[1];
-  }
+  // Handle double quotes in title
+  cleaned = cleaned.replace(/"/g, " ");
 
   for (const pattern of NOISE_PATTERNS) {
     cleaned = cleaned.replace(pattern, " ");
@@ -73,9 +70,9 @@ export function cleanTitle(title: string): string {
 
   // Remove content in parentheses that are clearly not part of the title
   cleaned = cleaned.replace(/\([^)]*\)/g, (match) => {
-    // Keep parenthetical content that might be part of the title (e.g. "Pulp")
     const inner = match.slice(1, -1).trim();
-    if (inner.length <= 15 && !/official|video|audio|lyric|mv|가사|해석/i.test(inner)) {
+    // If it's short and doesn't contain noise keywords, keep it (e.g. "GEZAN")
+    if (inner.length > 0 && inner.length <= 15 && !/official|video|audio|lyric|mv|가사|해석/i.test(inner)) {
       return inner;
     }
     return " ";
@@ -111,11 +108,7 @@ function buildSearchQueries(title: string, channelTitle: string): string[] {
   // 2. Channel name as Artist + Title
   const channelClean = channelTitle.replace(/\s*[-–]\s*topic$/i, "").trim();
   if (channelClean) {
-    if (cleaned.length < 10) {
-      queries.push(`${channelClean} ${cleaned}`);
-    } else if (!cleaned.toLowerCase().includes(channelClean.toLowerCase())) {
-      queries.push(`${channelClean} ${cleaned}`);
-    }
+    queries.push(`${channelClean} ${cleaned}`);
   }
 
   // 3. Full cleaned title
@@ -125,11 +118,12 @@ function buildSearchQueries(title: string, channelTitle: string): string[] {
 }
 
 /**
- * Simple string similarity (Levenshtein distance based)
+ * Calculate similarity based on both character-level (Levenshtein) 
+ * and token-level (Jaccard) overlap.
  */
-function stringSimilarity(a: string, b: string): number {
+function calculateSimilarity(a: string, b: string): number {
   const normalize = (s: string) => 
-    s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+    s.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, "").trim();
   
   const na = normalize(a);
   const nb = normalize(b);
@@ -137,6 +131,15 @@ function stringSimilarity(a: string, b: string): number {
   if (na === nb) return 1;
   if (!na || !nb) return 0;
 
+  // 1. Token-based similarity (Jaccard)
+  const tokensA = new Set(na.split(/\s+/).filter(t => t.length > 0));
+  const tokensB = new Set(nb.split(/\s+/).filter(t => t.length > 0));
+  
+  const intersection = new Set([...tokensA].filter(t => tokensB.has(t)));
+  const union = new Set([...tokensA, ...tokensB]);
+  const tokenScore = intersection.size / union.size;
+
+  // 2. Character-based similarity (Levenshtein distance)
   const longer = na.length > nb.length ? na : nb;
   const shorter = na.length > nb.length ? nb : na;
 
@@ -157,8 +160,11 @@ function stringSimilarity(a: string, b: string): number {
     }
     if (i > 0) costs[shorter.length] = lastVal;
   }
+  const levenshteinScore = 1 - costs[shorter.length] / longer.length;
 
-  return 1 - costs[shorter.length] / longer.length;
+  // Pick the best of the two, or a weighted average
+  // Jaccard is better for word reordering, Levenshtein for typo/small changes
+  return Math.max(tokenScore, levenshteinScore);
 }
 
 /**
@@ -181,7 +187,7 @@ export async function matchTrack(
     if (!track) continue;
 
     const trackLabel = `${track.artists.map((a) => a.name).join(" ")} ${track.name}`;
-    const similarity = stringSimilarity(cleanedTitle, trackLabel);
+    const similarity = calculateSimilarity(cleanedTitle, trackLabel);
 
     if (similarity > bestConfidence) {
       bestMatch = track;
@@ -192,9 +198,9 @@ export async function matchTrack(
     if (similarity > 0.8) break;
   }
 
-  // Threshold: only return if confidence is high enough to be likely correct
+  // Threshold: back to a more balanced level
   return {
-    spotifyTrack: bestConfidence >= 0.5 ? bestMatch : null,
+    spotifyTrack: bestConfidence >= 0.3 ? bestMatch : null,
     confidence: bestConfidence,
     query: bestQuery,
   };
