@@ -1,4 +1,4 @@
-import { searchTracks, type SpotifyTrack } from "./spotify";
+import { searchTrack, type SpotifyTrack } from "./spotify";
 
 export interface MatchResult {
   spotifyTrack: SpotifyTrack | null;
@@ -76,7 +76,7 @@ export function cleanTitle(title: string): string {
     // Keep parenthetical content that might be part of the title (e.g. "Pulp")
     const inner = match.slice(1, -1).trim();
     if (inner.length <= 15 && !/official|video|audio|lyric|mv|가사|해석/i.test(inner)) {
-      return inner; // Extract the content instead of removing or keeping parentheses
+      return inner;
     }
     return " ";
   });
@@ -84,8 +84,7 @@ export function cleanTitle(title: string): string {
   // Collapse whitespace
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
-  // Remove leading/trailing punctuation but keep Unicode letters
-  // Using \p{L} for any Unicode letter, \p{N} for numbers
+  // Remove leading/trailing punctuation but keep Unicode letters and numbers
   cleaned = cleaned.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "").trim();
 
   return cleaned;
@@ -93,7 +92,6 @@ export function cleanTitle(title: string): string {
 
 /**
  * Build multiple search queries with decreasing specificity.
- * Returns queries from most specific to most general.
  */
 function buildSearchQueries(title: string, channelTitle: string): string[] {
   const cleaned = cleanTitle(title);
@@ -106,22 +104,14 @@ function buildSearchQueries(title: string, channelTitle: string): string[] {
   if (parts.length >= 2) {
     const p1 = parts[0];
     const p2 = parts[1];
-    
-    // Strategy A: Artist - Track
-    queries.push(`artist:"${p1}" track:"${p2}"`);
     queries.push(`${p1} ${p2}`);
-    
-    // Strategy B: Track - Artist (Often happens in YouTube titles)
-    queries.push(`artist:"${p2}" track:"${p1}"`);
-    queries.push(`${p2} ${p1}`);
+    queries.push(`${p2} ${p1}`); // Reverse order
   }
 
-  // 2. Title + Channel name (Channel is very often the artist)
+  // 2. Channel name as Artist + Title
   const channelClean = channelTitle.replace(/\s*[-–]\s*topic$/i, "").trim();
   if (channelClean) {
-    // If title is short, the channel name is crucial
     if (cleaned.length < 10) {
-      queries.push(`artist:"${channelClean}" track:"${cleaned}"`);
       queries.push(`${channelClean} ${cleaned}`);
     } else if (!cleaned.toLowerCase().includes(channelClean.toLowerCase())) {
       queries.push(`${channelClean} ${cleaned}`);
@@ -131,12 +121,11 @@ function buildSearchQueries(title: string, channelTitle: string): string[] {
   // 3. Full cleaned title
   queries.push(cleaned);
 
-  return Array.from(new Set(queries)); // Remove duplicates
+  return Array.from(new Set(queries));
 }
 
 /**
  * Simple string similarity (Levenshtein distance based)
- * Improved to handle non-alphanumeric better
  */
 function stringSimilarity(a: string, b: string): number {
   const normalize = (s: string) => 
@@ -182,39 +171,31 @@ export async function matchTrack(
 ): Promise<MatchResult> {
   const queries = buildSearchQueries(youtubeTitle, channelTitle);
   let bestMatch: SpotifyTrack | null = null;
-  let bestScore = 0;
+  let bestConfidence = 0;
   let bestQuery = "";
 
   const cleanedTitle = cleanTitle(youtubeTitle);
 
   for (const query of queries) {
-    const tracks = await searchTracks(accessToken, query);
-    if (tracks.length === 0) continue;
+    const track = await searchTrack(accessToken, query);
+    if (!track) continue;
 
-    for (const track of tracks) {
-      const trackLabel = `${track.artists.map((a) => a.name).join(" ")} ${track.name}`;
-      const similarity = stringSimilarity(cleanedTitle, trackLabel);
-      
-      // Calculate score based on similarity (80%) and popularity (20%)
-      const score = (similarity * 0.8) + ((track.popularity / 100) * 0.2);
+    const trackLabel = `${track.artists.map((a) => a.name).join(" ")} ${track.name}`;
+    const similarity = stringSimilarity(cleanedTitle, trackLabel);
 
-      if (score > bestScore) {
-        bestMatch = track;
-        bestScore = score;
-        bestQuery = query;
-      }
-
-      // If we got a near-perfect match, stop searching
-      if (similarity > 0.9) break;
+    if (similarity > bestConfidence) {
+      bestMatch = track;
+      bestConfidence = similarity;
+      bestQuery = query;
     }
 
-    if (bestScore > 0.8) break;
+    if (similarity > 0.8) break;
   }
 
-  // Adjust threshold: even a lower score is okay if the match is plausible
+  // Threshold: only return if confidence is high enough to be likely correct
   return {
-    spotifyTrack: bestScore >= 0.3 ? bestMatch : null,
-    confidence: bestScore,
+    spotifyTrack: bestConfidence >= 0.5 ? bestMatch : null,
+    confidence: bestConfidence,
     query: bestQuery,
   };
 }
