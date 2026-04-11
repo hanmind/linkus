@@ -1,4 +1,4 @@
-import { searchTrack, type SpotifyTrack } from "./spotify";
+import { searchTracks, type SpotifyTrack } from "./spotify";
 
 export interface MatchResult {
   spotifyTrack: SpotifyTrack | null;
@@ -34,6 +34,9 @@ const NOISE_PATTERNS = [
   /\bhan\/rom\/eng\b/i,
   /\brom\/eng\b/i,
   /\b가사\b/i,
+  /\b해석\b/i,
+  /\b가사해석\b/i,
+  /〔가사\/해석〕/i,
   /\bft\.?\s/i,
   /\bfeat\.?\s/i,
   /\(feat\.[^)]*\)/i,
@@ -43,15 +46,23 @@ const NOISE_PATTERNS = [
   /\b4k\b/i,
   /\b1080p\b/i,
   /\d{4}\s*ver(sion)?\.?/i,
+  /\blive\s*(at|in)?\b[^|]*/i,
+  /\bradio\s*edit\b/i,
   /\|[^|]*$/,
 ];
 
 /**
  * Clean a YouTube title into a search-friendly query.
- * Attempts to extract "artist - track" if possible.
+ * Support Unicode characters (Hanja, Hiragana, Katakana, etc.)
  */
 export function cleanTitle(title: string): string {
   let cleaned = title.trim();
+
+  // Remove content in quotes if they seem to be the track title
+  const quoteMatch = cleaned.match(/"([^"]+)"/);
+  if (quoteMatch && quoteMatch[1].length > 2) {
+    cleaned = quoteMatch[1];
+  }
 
   for (const pattern of NOISE_PATTERNS) {
     cleaned = cleaned.replace(pattern, " ");
@@ -62,10 +73,10 @@ export function cleanTitle(title: string): string {
 
   // Remove content in parentheses that are clearly not part of the title
   cleaned = cleaned.replace(/\([^)]*\)/g, (match) => {
-    // Keep short parenthetical content that's likely part of the title
+    // Keep parenthetical content that might be part of the title (e.g. "Pulp")
     const inner = match.slice(1, -1).trim();
-    if (inner.length <= 15 && !/official|video|audio|lyric|mv/i.test(inner)) {
-      return match;
+    if (inner.length <= 15 && !/official|video|audio|lyric|mv|가사|해석/i.test(inner)) {
+      return inner; // Extract the content instead of removing or keeping parentheses
     }
     return " ";
   });
@@ -73,8 +84,9 @@ export function cleanTitle(title: string): string {
   // Collapse whitespace
   cleaned = cleaned.replace(/\s+/g, " ").trim();
 
-  // Remove leading/trailing punctuation
-  cleaned = cleaned.replace(/^[^\w가-힣]+|[^\w가-힣]+$/g, "").trim();
+  // Remove leading/trailing punctuation but keep Unicode letters
+  // Using \p{L} for any Unicode letter, \p{N} for numbers
+  cleaned = cleaned.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "").trim();
 
   return cleaned;
 }
@@ -87,37 +99,57 @@ function buildSearchQueries(title: string, channelTitle: string): string[] {
   const cleaned = cleanTitle(title);
   const queries: string[] = [];
 
-  // If the title contains a dash separator, it's likely "Artist - Track"
-  const dashMatch = cleaned.match(/^(.+?)\s*[-–—]\s*(.+)$/);
-  if (dashMatch) {
-    const [, artist, track] = dashMatch;
-    queries.push(`artist:${artist.trim()} track:${track.trim()}`);
-    queries.push(`${artist.trim()} ${track.trim()}`);
+  // 1. Try separators (Dash, Pipe, Colon)
+  const separators = /[-–—|:]/;
+  const parts = cleaned.split(separators).map((p) => p.trim());
+
+  if (parts.length >= 2) {
+    const p1 = parts[0];
+    const p2 = parts[1];
+    
+    // Strategy A: Artist - Track
+    queries.push(`artist:"${p1}" track:"${p2}"`);
+    queries.push(`${p1} ${p2}`);
+    
+    // Strategy B: Track - Artist (Often happens in YouTube titles)
+    queries.push(`artist:"${p2}" track:"${p1}"`);
+    queries.push(`${p2} ${p1}`);
   }
 
-  // Full cleaned title
-  queries.push(cleaned);
-
-  // Cleaned title + channel name (channel is often the artist)
-  if (channelTitle && !cleaned.toLowerCase().includes(channelTitle.toLowerCase())) {
-    const channelClean = channelTitle.replace(/\s*[-–]\s*topic$/i, "").trim();
-    if (channelClean) {
+  // 2. Title + Channel name (Channel is very often the artist)
+  const channelClean = channelTitle.replace(/\s*[-–]\s*topic$/i, "").trim();
+  if (channelClean) {
+    // If title is short, the channel name is crucial
+    if (cleaned.length < 10) {
+      queries.push(`artist:"${channelClean}" track:"${cleaned}"`);
+      queries.push(`${channelClean} ${cleaned}`);
+    } else if (!cleaned.toLowerCase().includes(channelClean.toLowerCase())) {
       queries.push(`${channelClean} ${cleaned}`);
     }
   }
 
-  return queries;
+  // 3. Full cleaned title
+  queries.push(cleaned);
+
+  return Array.from(new Set(queries)); // Remove duplicates
 }
 
+/**
+ * Simple string similarity (Levenshtein distance based)
+ * Improved to handle non-alphanumeric better
+ */
 function stringSimilarity(a: string, b: string): number {
-  const al = a.toLowerCase();
-  const bl = b.toLowerCase();
-  if (al === bl) return 1;
+  const normalize = (s: string) => 
+    s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  
+  const na = normalize(a);
+  const nb = normalize(b);
+  
+  if (na === nb) return 1;
+  if (!na || !nb) return 0;
 
-  const longer = al.length > bl.length ? al : bl;
-  const shorter = al.length > bl.length ? bl : al;
-
-  if (longer.length === 0) return 1;
+  const longer = na.length > nb.length ? na : nb;
+  const shorter = na.length > nb.length ? nb : na;
 
   const costs: number[] = [];
   for (let i = 0; i <= longer.length; i++) {
@@ -142,7 +174,6 @@ function stringSimilarity(a: string, b: string): number {
 
 /**
  * Match a YouTube video to a Spotify track.
- * Tries multiple search strategies and picks the best result.
  */
 export async function matchTrack(
   accessToken: string,
@@ -151,30 +182,39 @@ export async function matchTrack(
 ): Promise<MatchResult> {
   const queries = buildSearchQueries(youtubeTitle, channelTitle);
   let bestMatch: SpotifyTrack | null = null;
-  let bestConfidence = 0;
+  let bestScore = 0;
   let bestQuery = "";
 
+  const cleanedTitle = cleanTitle(youtubeTitle);
+
   for (const query of queries) {
-    const track = await searchTrack(accessToken, query);
-    if (!track) continue;
+    const tracks = await searchTracks(accessToken, query);
+    if (tracks.length === 0) continue;
 
-    const trackLabel = `${track.artists.map((a) => a.name).join(" ")} ${track.name}`;
-    const cleanedTitle = cleanTitle(youtubeTitle);
-    const similarity = stringSimilarity(cleanedTitle, trackLabel);
+    for (const track of tracks) {
+      const trackLabel = `${track.artists.map((a) => a.name).join(" ")} ${track.name}`;
+      const similarity = stringSimilarity(cleanedTitle, trackLabel);
+      
+      // Calculate score based on similarity (80%) and popularity (20%)
+      const score = (similarity * 0.8) + ((track.popularity / 100) * 0.2);
 
-    if (similarity > bestConfidence) {
-      bestMatch = track;
-      bestConfidence = similarity;
-      bestQuery = query;
+      if (score > bestScore) {
+        bestMatch = track;
+        bestScore = score;
+        bestQuery = query;
+      }
+
+      // If we got a near-perfect match, stop searching
+      if (similarity > 0.9) break;
     }
 
-    // If we got a very good match, stop searching
-    if (similarity > 0.7) break;
+    if (bestScore > 0.8) break;
   }
 
+  // Adjust threshold: even a lower score is okay if the match is plausible
   return {
-    spotifyTrack: bestConfidence >= 0.25 ? bestMatch : null,
-    confidence: bestConfidence,
+    spotifyTrack: bestScore >= 0.3 ? bestMatch : null,
+    confidence: bestScore,
     query: bestQuery,
   };
 }

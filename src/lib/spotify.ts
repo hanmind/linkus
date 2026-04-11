@@ -6,6 +6,7 @@ export interface SpotifyTrack {
   name: string;
   artists: { name: string }[];
   uri: string;
+  popularity: number;
 }
 
 export async function refreshAccessToken(refreshToken: string): Promise<{
@@ -55,10 +56,10 @@ async function spotifyFetch(
   });
 }
 
-export async function searchTrack(
+export async function searchTracks(
   accessToken: string,
   query: string
-): Promise<SpotifyTrack | null> {
+): Promise<SpotifyTrack[]> {
   const params = new URLSearchParams({
     q: query,
     type: "track",
@@ -66,10 +67,10 @@ export async function searchTrack(
   });
 
   const res = await spotifyFetch(accessToken, `/search?${params}`);
-  if (!res.ok) return null;
+  if (!res.ok) return [];
 
   const data = await res.json();
-  return data.tracks?.items?.[0] ?? null;
+  return data.tracks?.items ?? [];
 }
 
 export async function createPlaylist(
