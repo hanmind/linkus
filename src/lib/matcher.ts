@@ -37,8 +37,8 @@ const NOISE_PATTERNS = [
   /\b해석\b/i,
   /\b가사해석\b/i,
   /〔가사\/해석〕/i,
-  /\bft\.?\s/i,
-  /\bfeat\.?\s/i,
+  // ft./feat. with names: remove 'ft. Name' completely to clean up query
+  /\b(ft|feat)\.?\s+[^\-|:|(|\[]+/i,
   /\(feat\.?[^)]*\)/i,
   /\(ft\.?[^)]*\)/i,
   /\bremaster(ed)?\b/i,
@@ -52,13 +52,31 @@ const NOISE_PATTERNS = [
 ];
 
 /**
+ * Clean a channel title to get the artist name.
+ */
+function cleanChannel(name: string): string {
+  const noise = [
+    /\bofficial\b/i,
+    /\bvevo\b/i,
+    /\bchannel\b/i,
+    /\s*[-–]\s*topic$/i,
+    /주제$/i,
+    /유튜브/i,
+  ];
+  let cleaned = name.trim();
+  for (const p of noise) {
+    cleaned = cleaned.replace(p, "");
+  }
+  return cleaned.trim();
+}
+
+/**
  * Clean a YouTube title into a search-friendly query.
- * Support Unicode characters (Hanja, Hiragana, Katakana, etc.)
  */
 export function cleanTitle(title: string): string {
   let cleaned = title.trim();
 
-  // Handle double quotes in title
+  // Handle double quotes
   cleaned = cleaned.replace(/"/g, " ");
 
   for (const pattern of NOISE_PATTERNS) {
@@ -71,7 +89,6 @@ export function cleanTitle(title: string): string {
   // Remove content in parentheses that are clearly not part of the title
   cleaned = cleaned.replace(/\([^)]*\)/g, (match) => {
     const inner = match.slice(1, -1).trim();
-    // If it's short and doesn't contain noise keywords, keep it (e.g. "GEZAN")
     if (inner.length > 0 && inner.length <= 15 && !/official|video|audio|lyric|mv|가사|해석/i.test(inner)) {
       return inner;
     }
@@ -92,6 +109,7 @@ export function cleanTitle(title: string): string {
  */
 function buildSearchQueries(title: string, channelTitle: string): string[] {
   const cleaned = cleanTitle(title);
+  const artist = cleanChannel(channelTitle);
   const queries: string[] = [];
 
   // 1. Try separators (Dash, Pipe, Colon)
@@ -101,14 +119,20 @@ function buildSearchQueries(title: string, channelTitle: string): string[] {
   if (parts.length >= 2) {
     const p1 = parts[0];
     const p2 = parts[1];
+    
+    // Explicit Spotify queries (Very precise)
+    queries.push(`artist:"${p1}" track:"${p2}"`);
+    queries.push(`artist:"${p2}" track:"${p1}"`);
+    
+    // Fallback combined
     queries.push(`${p1} ${p2}`);
-    queries.push(`${p2} ${p1}`); // Reverse order
+    queries.push(`${p2} ${p1}`);
   }
 
-  // 2. Channel name as Artist + Title
-  const channelClean = channelTitle.replace(/\s*[-–]\s*topic$/i, "").trim();
-  if (channelClean) {
-    queries.push(`${channelClean} ${cleaned}`);
+  // 2. Channel name + Title
+  if (artist) {
+    queries.push(`artist:"${artist}" track:"${cleaned}"`);
+    queries.push(`${artist} ${cleaned}`);
   }
 
   // 3. Full cleaned title
@@ -162,8 +186,6 @@ function calculateSimilarity(a: string, b: string): number {
   }
   const levenshteinScore = 1 - costs[shorter.length] / longer.length;
 
-  // Pick the best of the two, or a weighted average
-  // Jaccard is better for word reordering, Levenshtein for typo/small changes
   return Math.max(tokenScore, levenshteinScore);
 }
 
@@ -195,12 +217,13 @@ export async function matchTrack(
       bestQuery = query;
     }
 
+    // If we have a very strong match with an explicit artist search, stop early
     if (similarity > 0.8) break;
   }
 
-  // Threshold: back to a more balanced level
+  // Threshold: back to 0.4 for a better balance between "correctness" and "match rate"
   return {
-    spotifyTrack: bestConfidence >= 0.3 ? bestMatch : null,
+    spotifyTrack: bestConfidence >= 0.4 ? bestMatch : null,
     confidence: bestConfidence,
     query: bestQuery,
   };
