@@ -221,9 +221,9 @@ export async function matchTrack(
     if (similarity > 0.8) break;
   }
 
-  // Threshold: back to 0.4 for a better balance between "correctness" and "match rate"
+  // Threshold: back to 0.3 for a better balance between "correctness" and "match rate"
   return {
-    spotifyTrack: bestConfidence >= 0.4 ? bestMatch : null,
+    spotifyTrack: bestConfidence >= 0.3 ? bestMatch : null,
     confidence: bestConfidence,
     query: bestQuery,
   };
