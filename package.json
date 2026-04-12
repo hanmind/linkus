@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1",
+    "dev": "next dev --hostname 0.0.0.0",
     "build": "prisma generate --config prisma/prisma.config.ts && next build",
     "start": "next start",
     "lint": "eslint src/",
