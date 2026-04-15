@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
 
   if (!youtubeUrl || typeof youtubeUrl !== "string") {
     return NextResponse.json(
-      { error: "YouTube URL is required" },
+      { error: "YouTube URL을 입력해 주세요" },
       { status: 400 }
     );
   }
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
   const playlistId = extractPlaylistId(youtubeUrl);
   if (!playlistId) {
     return NextResponse.json(
-      { error: "Invalid YouTube playlist URL" },
+      { error: "유효하지 않은 YouTube 플레이리스트 URL입니다" },
       { status: 400 }
     );
   }
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   const ytPlaylist = await getPlaylistInfo(playlistId);
   if (!ytPlaylist) {
     return NextResponse.json(
-      { error: "YouTube playlist not found or not accessible" },
+      { error: "YouTube 플레이리스트를 찾을 수 없거나 접근할 수 없습니다 (비공개 여부 확인)" },
       { status: 404 }
     );
   }
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     where: { spotifyId: session.user.id },
   });
   if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
+    return NextResponse.json({ error: "사용자를 찾을 수 없습니다" }, { status: 404 });
   }
 
   const existing = await db.playlistLink.findUnique({
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
   });
   if (existing) {
     return NextResponse.json(
-      { error: "This playlist is already linked" },
+      { error: "이미 연동된 플레이리스트입니다" },
       { status: 409 }
     );
   }
