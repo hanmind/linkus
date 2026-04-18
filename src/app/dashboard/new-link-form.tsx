@@ -41,7 +41,7 @@ export function NewLinkForm({
         return;
       }
 
-      setSuccess(`"${data.youtubePlaylistTitle}" 연동 완료! 초기 동기화를 시작합니다.`);
+      setSuccess(`"${data.youtubePlaylistTitle}" 연동 완료! 첫 동기화를 시작합니다.`);
       setUrl("");
       await onCreated(data);
     } catch {
